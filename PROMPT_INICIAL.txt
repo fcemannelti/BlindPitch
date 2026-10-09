@@ -1,0 +1,27 @@
+Leia integralmente o AGENTS.md e docs/ESPECIFICACAO.md antes de modificar qualquer arquivo.
+
+Quero que você construa o BlindPitch como uma aplicação web completa e funcional, e não apenas um protótipo visual.
+
+Comece inspecionando a pasta e verificando se já existe uma stack. Se estiver vazia, escolha uma arquitetura moderna e adequada seguindo as recomendações do AGENTS.md.
+
+Implemente primeiro o MVP completo:
+- autenticação;
+- perfis participante, avaliador e organizador;
+- criação e envio de projetos;
+- código anônimo BP-2026-XXXX;
+- separação real entre PII e conteúdo científico;
+- distribuição de projetos a avaliadores;
+- painel do avaliador sem PII em modo anônimo;
+- rubrica configurável;
+- notas e comentários;
+- dashboard do organizador;
+- resultados e gráficos;
+- dados seed para demonstração.
+
+A anonimização deve existir também no backend/API. Não esconda dados apenas no frontend.
+
+Implemente testes, principalmente um teste que prove que um avaliador não recebe nome, foto, gênero, turma, e-mail ou outros dados identificáveis em uma avaliação anônima.
+
+Execute lint, typecheck, testes e build. Corrija os erros encontrados.
+
+Não pare para me pedir confirmação sobre decisões técnicas triviais. Faça escolhas razoáveis, documente-as e continue até que os critérios de aceite do AGENTS.md estejam atendidos.

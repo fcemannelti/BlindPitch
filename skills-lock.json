@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-arena": {
+      "source": "zhjai/agent-arena",
+      "sourceType": "github",
+      "skillPath": "skills/agent-arena/SKILL.md",
+      "computedHash": "01b00ed2a905a14a1d62df88b60c9b1618c4d9f05be1ec0c2a7eda9f1b849401"
+    },
+    "impeccable": {
+      "source": "pbakaus/impeccable",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/impeccable/SKILL.md",
+      "computedHash": "e0172ed584ba44b2e44e8a048ae66dccef04f21870b2ebf9c1be329b18513afa"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "6b526d013e28073246a36f99b529bc43745d30832ecfa8217b359c34f260ca6b"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "d8e7d3afe37dcc8a97b99ffb5afdb4d0919ae0092ea8b68f44eb201f035e33ac"
+    }
+  }
+}

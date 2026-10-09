@@ -1,0 +1,25 @@
+{
+  "name": "blindpitch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env server/index.mjs",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "seed": "node --env-file-if-exists=.env server/seed-cli.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "node scripts/check.mjs --types",
+    "lint": "node scripts/check.mjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "test:e2e": "node --test --test-isolation=none tests/api.test.mjs",
+    "test:browser": "node scripts/experience-qa.mjs",
+    "test:ux": "node scripts/ux-qa.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "firebase": "^13.0.0"
+  }
+}
