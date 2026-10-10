@@ -2,7 +2,20 @@ node_modules/
 dist/
 data/
 .env
+.env.*
+!.env.example
 test-results/
 playwright-report/
 *.tsbuildinfo
 .npm-cache/
+
+# Ferramentas locais de teste/verificação
+.pgtest/
+.tap.txt
+.pg.txt
+.vc.txt
+.codemod*.mjs
+.neon
+
+.vercel
+.env*

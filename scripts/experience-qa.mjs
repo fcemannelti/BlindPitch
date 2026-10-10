@@ -17,8 +17,8 @@ const executable=process.env.CHROME_PATH||[
 if(!executable)throw new Error('Configure CHROME_PATH para executar o teste de navegador.');
 const temporary=mkdtempSync(join(tmpdir(),'blindpitch-experience-'));
 const output=resolve('test-results/experience'+(process.env.QA_BROWSER==='edge'?'-edge':''));mkdirSync(output,{recursive:true});
-const db=openDb(join(temporary,'test.sqlite'));seed(db);
-const originalCount=db.prepare('SELECT count(*) n FROM projects').get().n;
+const db=openDb(join(temporary,'test.sqlite'));await seed(db);
+const originalCount=(await db.prepare('SELECT count(*) n FROM projects').get()).n;
 const server=createApp(db);await new Promise(resolvePromise=>server.listen(0,'127.0.0.1',resolvePromise));
 const base='http://127.0.0.1:'+server.address().port;
 const chrome=spawn(executable,['--headless','--no-first-run','--no-default-browser-check',
@@ -48,7 +48,7 @@ async function fill(name,value) {
   await evaluate(`{const control=document.querySelector('[name="${name}"]');control.value=${JSON.stringify(value)};control.dispatchEvent(new Event('input',{bubbles:true}));}`);
 }
 async function step(index) {
-  await until(()=>evaluate(`document.querySelector('#project-form')?.dataset.step==='${index}' && !document.querySelector('[data-wizard-next]').disabled`),'etapa '+index);
+  await until(async()=>evaluate(`document.querySelector('#project-form')?.dataset.step==='${index}' && !document.querySelector('[data-wizard-next]').disabled`),'etapa '+index);
   assert.equal(await evaluate(`document.querySelectorAll('.wizard-step:not([hidden])').length`),1);
   assert.equal(await evaluate(`document.querySelector('#wizard-progress').value`),index+1);
 }
@@ -56,7 +56,7 @@ async function screenshot(name){const result=await command('Page.captureScreensh
 function passed(name){report.push(name);console.log('OK · '+name);}
 try {
   let port;
-  await until(()=>{
+  await until(async()=>{
     try{const value=readFileSync(join(temporary,'DevToolsActivePort'),'utf8').split('\n')[0];if(!/^\d+$/u.test(value))return false;port=value;return true;}
     catch{return false;}
   },'inicialização do Chrome');
@@ -66,8 +66,8 @@ try {
   socket.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.method==='Runtime.exceptionThrown')browserErrors.push(data.params.exceptionDetails.text);if(data.method==='Runtime.consoleAPICalled'&&data.params.type==='error')browserErrors.push(data.params.args.map(arg=>arg.value||arg.description).join(' '));if(data.method==='Network.responseReceived'&&data.params.response.status>=400&&/\.(?:png|webp|svg|js|css)(?:\?|$)/u.test(data.params.response.url))browserErrors.push(data.params.response.url);const request=pending.get(data.id);if(!request)return;pending.delete(data.id);if(data.error)request.reject(new Error(data.error.message));else request.resolve(data.result);});
   await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
-  await command('Page.navigate',{url:base});await until(()=>visible('.owl-group'),'página inicial');
-  await until(()=>evaluate(`[...document.querySelectorAll('.owl-group img')].every(img=>img.complete&&img.naturalWidth>0)`),'carregamento dos seis WebP');
+  await command('Page.navigate',{url:base});await until(async()=>visible('.owl-group'),'página inicial');
+  await until(async()=>evaluate(`[...document.querySelectorAll('.owl-group img')].every(img=>img.complete&&img.naturalWidth>0)`),'carregamento dos seis WebP');
   assert.equal(await evaluate(`document.querySelectorAll('.owl-group img').length`),6);
   const lossless=await evaluate(`Promise.all([...document.querySelectorAll('.owl-group img')].map(async image=>{const original=new Image();original.src=image.src.replace('.webp','.png');await original.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);const encoded=ctx.getImageData(0,0,canvas.width,canvas.height).data;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(original,0,0);const source=ctx.getImageData(0,0,canvas.width,canvas.height).data;let different=0,max=0,alpha=0,visibleMax=0;for(let i=0;i<encoded.length;i++){const diff=Math.abs(encoded[i]-source[i]);if(diff){different++;max=Math.max(max,diff);if(i%4===3)alpha=Math.max(alpha,diff);else visibleMax=Math.max(visibleMax,diff*source[i-i%4+3]/255);}}return {different,max,alpha,visibleMax};}))`);
   // Chrome arredonda a pré-multiplicação RGB de PNG/WebP de forma diferente.
@@ -95,11 +95,11 @@ try {
   }
   passed('Página inicial sem overflow em seis larguras e nos dois temas.');
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
-  await evaluate(`location.hash='/login'`);await until(()=>visible('#auth-form'),'login');
-  await until(()=>evaluate(`[...document.images].every(image=>image.complete&&image.naturalWidth>0)`),'coruja de login');await screenshot('login-coruja-cientifica');
+  await evaluate(`location.hash='/login'`);await until(async()=>visible('#auth-form'),'login');
+  await until(async()=>evaluate(`[...document.images].every(image=>image.complete&&image.naturalWidth>0)`),'coruja de login');await screenshot('login-coruja-cientifica');
   await fill('email','participante1@blindpitch.demo');await fill('password','BlindPitch2026!');await click('#auth-form button[type="submit"]');
-  await until(()=>visible('a[href="#/projects/new"]'),'dashboard do participante');
-  await evaluate(`location.hash='/projects/new'`);await until(()=>visible('#project-form'),'assistente');await step(0);
+  await until(async()=>visible('a[href="#/projects/new"]'),'dashboard do participante');
+  await evaluate(`location.hash='/projects/new'`);await until(async()=>visible('#project-form'),'assistente');await step(0);
   await click('[data-wizard-next]');await step(0);
   assert.match(await evaluate(`document.querySelector('.wizard-validation').textContent`),/pelo menos 3/u);
   assert.equal(await evaluate(`document.activeElement.name`),'title');
@@ -164,86 +164,86 @@ try {
   passed('18 campos e revisão final, correção por campo, preservação integral e revisão responsiva em ambos os temas.');
   // Falha controlada no navegador: não altera a API nem os dados; preserva revisão.
   await evaluate(`window.qaFetch=window.fetch;window.fetch=(url,options)=>String(url).startsWith('/api/projects')&&options?.method==='POST'?Promise.resolve(new Response(JSON.stringify({error:'Falha simulada. Tente novamente.'}),{status:503,headers:{'Content-Type':'application/json'}})):window.qaFetch(url,options);`);
-  await click('[data-wizard-finish]');await until(()=>evaluate(`document.querySelector('.form-error')?.textContent.includes('Falha simulada')`),'erro de cadastro');
-  assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,originalCount);assert.equal(await evaluate(`document.querySelector('[name="title"]').value`),values.title);
+  await click('[data-wizard-finish]');await until(async()=>evaluate(`document.querySelector('.form-error')?.textContent.includes('Falha simulada')`),'erro de cadastro');
+  assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,originalCount);assert.equal(await evaluate(`document.querySelector('[name="title"]').value`),values.title);
   await evaluate(`window.fetch=window.qaFetch;window.qaPosts=0;window.fetch=async(url,options)=>{if(String(url).startsWith('/api/projects')&&options?.method==='POST'){window.qaPosts++;await new Promise(resolve=>setTimeout(resolve,250));}return window.qaFetch(url,options);};`);
   await evaluate(`{const form=document.querySelector('#project-form');form.requestSubmit(document.querySelector('[data-wizard-finish]'));form.requestSubmit(document.querySelector('[data-wizard-finish]'));form.requestSubmit(document.querySelector('[data-wizard-finish]'));}`);
-  await until(()=>visible('[data-submit-project]'),'projeto cadastrado');
-  assert.equal(await evaluate('window.qaPosts'),1);assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,originalCount+1);
-  const saved=db.prepare('SELECT * FROM projects WHERE title=?').get(values.title);assert.ok(saved);assert.equal(saved.status,'draft');
+  await until(async()=>visible('[data-submit-project]'),'projeto cadastrado');
+  assert.equal(await evaluate('window.qaPosts'),1);assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,originalCount+1);
+  const saved=await db.prepare('SELECT * FROM projects WHERE title=?').get(values.title);assert.ok(saved);assert.equal(saved.status,'draft');
   for(const key of keys)assert.equal(saved[key],values[key],key);
   passed('Falha da API preserva dados; confirmação tripla cria um único rascunho com os 18 campos corretos no SQLite.');
-  await click('.project-actions a[href$="/edit"]');await until(()=>visible('#project-form'),'editar rascunho');
+  await click('.project-actions a[href$="/edit"]');await until(async()=>visible('#project-form'),'editar rascunho');
   assert.equal(await evaluate(`document.querySelector('[name="title"]').value`),values.title);
   for(const key of optionalScientificFields)await fill(key,'');
   for(let index=0;index<keys.length;index++){await step(index);await click('[data-wizard-next]');}await step(keys.length);
-  await click('[data-wizard-finish]');await until(()=>visible('[data-submit-project]'),'rascunho atualizado');
-  assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,originalCount+1);
-  for(const key of optionalScientificFields)assert.equal(db.prepare('SELECT * FROM projects WHERE id=?').get(saved.id)[key],'');
-  await click('[data-submit-project]');await until(()=>visible('[data-confirm]'),'confirmação de envio');await click('[data-confirm]');
-  await until(()=>visible('.operation-success button:not([disabled])'),'confirmação da API');
-  const submitted=db.prepare('SELECT * FROM projects WHERE id=?').get(saved.id);assert.equal(submitted.status,'submitted');assert.match(submitted.anonymous_code,/^BP-2026-\d{4}$/u);
-  await click('.operation-success button');await until(()=>evaluate(`!document.querySelector('dialog')`),'fechamento do envio');
-  await until(()=>visible('.badge.submitted'),'status após envio');
+  await click('[data-wizard-finish]');await until(async()=>visible('[data-submit-project]'),'rascunho atualizado');
+  assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,originalCount+1);
+  for(const key of optionalScientificFields)assert.equal((await db.prepare('SELECT * FROM projects WHERE id=?').get(saved.id))[key],'');
+  await click('[data-submit-project]');await until(async()=>visible('[data-confirm]'),'confirmação de envio');await click('[data-confirm]');
+  await until(async()=>visible('.operation-success button:not([disabled])'),'confirmação da API');
+  const submitted=await db.prepare('SELECT * FROM projects WHERE id=?').get(saved.id);assert.equal(submitted.status,'submitted');assert.match(submitted.anonymous_code,/^BP-2026-\d{4}$/u);
+  await click('.operation-success button');await until(async()=>evaluate(`!document.querySelector('dialog')`),'fechamento do envio');
+  await until(async()=>visible('.badge.submitted'),'status após envio');
   assert.equal(await visible('.project-actions a[href$="/edit"]'),false);
   passed('Edição do rascunho usa PUT sem duplicar; opcionais vazios aceitos; envio real gera código anônimo e bloqueia edição.');
   // Um rascunho realmente incompleto continua permitido.
-  await evaluate(`location.hash='/projects/new'`);await until(()=>visible('#project-form'),'novo rascunho incompleto');
+  await evaluate(`location.hash='/projects/new'`);await until(async()=>visible('#project-form'),'novo rascunho incompleto');
   await fill('title','Rascunho incompleto permitido');await click('[data-wizard-next]');await step(1);await fill('scientific_area','Outra área científica');
   for(let index=1;index<keys.length;index++){await step(index);await click('[data-wizard-next]');}await step(keys.length);
   // O servidor salva, mas a primeira resposta se perde. Repetir não pode duplicar.
   await evaluate(`window.fetch=async(url,options)=>{const response=await window.qaFetch(url,options);if(String(url).startsWith('/api/projects')&&options?.method==='POST'){window.fetch=window.qaFetch;throw new TypeError('Conexão interrompida após salvar');}return response;};`);
-  await click('[data-wizard-finish]');await until(()=>evaluate(`document.querySelector('.form-error')?.textContent.includes('Verifique sua conexão')`),'resposta perdida');
-  assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,originalCount+2);
+  await click('[data-wizard-finish]');await until(async()=>evaluate(`document.querySelector('.form-error')?.textContent.includes('Verifique sua conexão')`),'resposta perdida');
+  assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,originalCount+2);
   await click('[data-wizard-finish]');
-  await until(()=>visible('[data-submit-project]'),'rascunho incompleto salvo');
-  const incomplete=db.prepare('SELECT * FROM projects WHERE title=?').get('Rascunho incompleto permitido');assert.ok(incomplete);assert.equal(incomplete.problem,'');assert.equal(incomplete.status,'draft');
-  assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,originalCount+2);
+  await until(async()=>visible('[data-submit-project]'),'rascunho incompleto salvo');
+  const incomplete=await db.prepare('SELECT * FROM projects WHERE title=?').get('Rascunho incompleto permitido');assert.ok(incomplete);assert.equal(incomplete.problem,'');assert.equal(incomplete.status,'draft');
+  assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,originalCount+2);
   passed('Rascunho incompleto permitido; resposta perdida após salvar pode ser repetida sem duplicar o registro.');
-  await evaluate(`location.hash='/dashboard'`);await until(()=>visible('.project-card'),'cards do participante');
+  await evaluate(`location.hash='/dashboard'`);await until(async()=>visible('.project-card'),'cards do participante');
   assert.equal(await evaluate(`[...document.querySelectorAll('.project-card')].every(card=>card.querySelector('[data-area-symbol]')&&card.querySelector('svg'))`),true);
   assert.equal(await evaluate(`!![...document.querySelectorAll('.project-card')].find(card=>card.textContent.includes('Projeto corrigido na revisão'))?.querySelector('[data-area-symbol="engineering"]')`),true);
   await screenshot('cards-com-icones');
-  await until(()=>evaluate(`[...document.images].every(image=>image.complete&&image.naturalWidth>0)`),'imagens internas');
+  await until(async()=>evaluate(`[...document.images].every(image=>image.complete&&image.naturalWidth>0)`),'imagens internas');
   assert.equal(await evaluate(`document.body.textContent.includes('Íris')||!!document.querySelector('img[src*="/mascot/"]')`),false);
   assert.deepEqual(browserErrors,[]);passed('Cards usam o ícone da área real; nenhuma imagem quebrada, referência ao mascote removido ou erro no console.');
-  const originalEvent=db.prepare("SELECT value FROM settings WHERE key='active_event'").get().value;
+  const originalEvent=(await db.prepare("SELECT value FROM settings WHERE key='active_event'").get()).value;
   async function switchUser(email) {
-    if(await visible('#logout')) {await click('#logout');await until(()=>visible('#auth-form'),'logout');}
+    if(await visible('#logout')) {await click('#logout');await until(async()=>visible('#auth-form'),'logout');}
     await fill('email',email);await fill('password','BlindPitch2026!');await click('#auth-form button[type="submit"]');
-    await until(()=>visible('#logout'),'sessão autenticada');
+    await until(async()=>visible('#logout'),'sessão autenticada');
   }
   await switchUser('organizador@blindpitch.demo');
-  await evaluate(`location.hash='/projects/${saved.id}'`);await until(()=>visible('#anonymize-form'),'revisão de anonimização');
+  await evaluate(`location.hash='/projects/${saved.id}'`);await until(async()=>visible('#anonymize-form'),'revisão de anonimização');
   await evaluate(`document.querySelector('[name="approved"]').checked=true`);await click('#anonymize-form button');
-  await until(()=>visible('.operation-success button:not([disabled])'),'anonimização salva');await click('.operation-success button');
-  await until(()=>evaluate(`!document.querySelector('dialog')`),'revisão concluída');
-  assert.equal(db.prepare('SELECT anonymization_approved FROM projects WHERE id=?').get(saved.id).anonymization_approved,1);
-  await evaluate(`location.hash='/assignments'`);await until(()=>visible('#assignment-form'),'distribuição');
-  const reviewerId=db.prepare("SELECT id FROM users WHERE email='avaliador1@blindpitch.demo'").get().id;
+  await until(async()=>visible('.operation-success button:not([disabled])'),'anonimização salva');await click('.operation-success button');
+  await until(async()=>evaluate(`!document.querySelector('dialog')`),'revisão concluída');
+  assert.equal((await db.prepare('SELECT anonymization_approved FROM projects WHERE id=?').get(saved.id)).anonymization_approved,1);
+  await evaluate(`location.hash='/assignments'`);await until(async()=>visible('#assignment-form'),'distribuição');
+  const reviewerId=(await db.prepare("SELECT id FROM users WHERE email='avaliador1@blindpitch.demo'").get()).id;
   await fill('project_id',saved.id);await fill('reviewer_user_id',reviewerId);await fill('review_mode','anonymous');await click('#assignment-form button');
-  await until(()=>!!db.prepare('SELECT id FROM assignments WHERE project_id=? AND reviewer_user_id=?').get(saved.id,reviewerId),'atribuição salva');
-  const assigned=db.prepare('SELECT id FROM assignments WHERE project_id=? AND reviewer_user_id=?').get(saved.id,reviewerId);
-  await switchUser('avaliador1@blindpitch.demo');await evaluate(`location.hash='/reviews/${assigned.id}'`);await until(()=>visible('#review-form'),'rubrica');
+  await until(async()=>!!await db.prepare('SELECT id FROM assignments WHERE project_id=? AND reviewer_user_id=?').get(saved.id,reviewerId),'atribuição salva');
+  const assigned=await db.prepare('SELECT id FROM assignments WHERE project_id=? AND reviewer_user_id=?').get(saved.id,reviewerId);
+  await switchUser('avaliador1@blindpitch.demo');await evaluate(`location.hash='/reviews/${assigned.id}'`);await until(async()=>visible('#review-form'),'rubrica');
   assert.equal(await visible('.anonymous-banner'),true);
   const response=await evaluate(`fetch('/api/assignments/${assigned.id}').then(response=>response.json())`);
   for(const secret of ['Marina Alves','participante1@blindpitch.demo','Escola fictícia Aurora'])assert.equal(JSON.stringify(response).includes(secret),false);
   assert.equal(response.author,undefined);assert.equal(response.project.id,undefined);
-  const criteria=db.prepare('SELECT id FROM rubric_criteria WHERE event_id=? ORDER BY order_index').all(originalEvent);
+  const criteria=await db.prepare('SELECT id FROM rubric_criteria WHERE event_id=? ORDER BY order_index').all(originalEvent);
   for(const criterion of criteria)await fill('score_'+criterion.id,'8');
   await fill('general_comment','Comentário científico fictício da auditoria.');
-  await click('#review-form button[value="draft"]');await until(()=>evaluate(`document.querySelector('#review-form')?.dataset.busy===undefined`),'rascunho da avaliação');
-  assert.equal(db.prepare('SELECT total_score FROM reviews WHERE assignment_id=?').get(assigned.id).total_score,48);
-  await click('#review-form button[value="final"]');await until(()=>visible('[data-confirm]'),'confirmar avaliação');await click('[data-confirm]');
-  await until(()=>visible('.operation-success button:not([disabled])'),'avaliação finalizada');await click('.operation-success button');
-  await until(()=>visible('#review-form fieldset[disabled]'),'avaliação bloqueada');
-  assert.equal(db.prepare('SELECT count(*) n FROM reviews WHERE assignment_id=? AND submitted_at IS NOT NULL').get(assigned.id).n,1);
-  await evaluate(`location.hash='/history'`);await until(()=>visible(`a[href="#/reviews/${assigned.id}"]`),'histórico com avaliação');
+  await click('#review-form button[value="draft"]');await until(async()=>evaluate(`document.querySelector('#review-form')?.dataset.busy===undefined`),'rascunho da avaliação');
+  assert.equal((await db.prepare('SELECT total_score FROM reviews WHERE assignment_id=?').get(assigned.id)).total_score,48);
+  await click('#review-form button[value="final"]');await until(async()=>visible('[data-confirm]'),'confirmar avaliação');await click('[data-confirm]');
+  await until(async()=>visible('.operation-success button:not([disabled])'),'avaliação finalizada');await click('.operation-success button');
+  await until(async()=>visible('#review-form fieldset[disabled]'),'avaliação bloqueada');
+  assert.equal((await db.prepare('SELECT count(*) n FROM reviews WHERE assignment_id=? AND submitted_at IS NOT NULL').get(assigned.id)).n,1);
+  await evaluate(`location.hash='/history'`);await until(async()=>visible(`a[href="#/reviews/${assigned.id}"]`),'histórico com avaliação');
   passed('Organizador revisa e atribui; avaliador recebe API sem autoria, salva notas, finaliza uma vez e consulta histórico.');
-  await switchUser('organizador@blindpitch.demo');await evaluate(`location.hash='/settings'`);await until(()=>visible('#new-event-form'),'configuração');
+  await switchUser('organizador@blindpitch.demo');await evaluate(`location.hash='/settings'`);await until(async()=>visible('#new-event-form'),'configuração');
   await evaluate(`{const form=document.querySelector('#new-event-form');form.elements.name.value='Edição da auditoria';form.elements.year.value='2027';form.requestSubmit();}`);
-  await until(()=>visible('[data-event-select]'),'seletor entre edições');
-  const newEvent=db.prepare("SELECT id FROM events WHERE name='Edição da auditoria'").get().id;
+  await until(async()=>visible('[data-event-select]'),'seletor entre edições');
+  const newEvent=(await db.prepare("SELECT id FROM events WHERE name='Edição da auditoria'").get()).id;
   for(const email of ['participante1@blindpitch.demo','avaliador1@blindpitch.demo']) {
     await switchUser(email);assert.equal(await evaluate(`document.querySelector('[data-event-select]').value`),newEvent);
     assert.equal(await visible('.demo-note'),false);
@@ -253,16 +253,16 @@ try {
       assert.equal(await visible('[data-event-select]'),true);
     }
     await evaluate(`{const select=document.querySelector('[data-event-select]');select.value=${JSON.stringify(originalEvent)};select.dispatchEvent(new Event('change',{bubbles:true}));}`);
-    await until(()=>visible('.demo-note'),'edição anterior');
-    if(email.startsWith('participante'))await until(()=>visible(`a[href="#/projects/${saved.id}"]`),'projeto da edição anterior');
-    else {await evaluate(`location.hash='/history'`);await until(()=>visible(`a[href="#/reviews/${assigned.id}"]`),'avaliação da edição anterior');}
+    await until(async()=>visible('.demo-note'),'edição anterior');
+    if(email.startsWith('participante'))await until(async()=>visible(`a[href="#/projects/${saved.id}"]`),'projeto da edição anterior');
+    else {await evaluate(`location.hash='/history'`);await until(async()=>visible(`a[href="#/reviews/${assigned.id}"]`),'avaliação da edição anterior');}
   }
   passed('Participante e avaliador alternam edições no celular/desktop e recuperam projetos/histórico; rótulo demo acompanha a edição.');
-  await click('#logout');await until(()=>visible('#auth-form'),'sair para cadastro');await evaluate(`location.hash='/register'`);await until(()=>visible('[name="name"]'),'cadastro público');
+  await click('#logout');await until(async()=>visible('#auth-form'),'sair para cadastro');await evaluate(`location.hash='/register'`);await until(async()=>visible('[name="name"]'),'cadastro público');
   await fill('name','Pessoa Fictícia da Auditoria');await fill('email','auditoria@example.test');await fill('password','BlindPitch2026!');await click('#auth-form button');
-  await until(()=>evaluate(`location.hash==='#/login'`),'conta cadastrada');await until(()=>visible('#auth-form'),'login da conta nova');
-  await switchUser('auditoria@example.test');assert.ok(db.prepare("SELECT id FROM users WHERE email='auditoria@example.test' AND role='participant'").get());
-  await click('#logout');await until(()=>visible('#auth-form'),'logout final');
+  await until(async()=>evaluate(`location.hash==='#/login'`),'conta cadastrada');await until(async()=>visible('#auth-form'),'login da conta nova');
+  await switchUser('auditoria@example.test');assert.ok(await db.prepare("SELECT id FROM users WHERE email='auditoria@example.test' AND role='participant'").get());
+  await click('#logout');await until(async()=>visible('#auth-form'),'logout final');
   passed('Cadastro de conta fictícia, login e logout executados pela interface.');
   assert.deepEqual(browserErrors,[]);
   const browserVersion=await command('Browser.getVersion');

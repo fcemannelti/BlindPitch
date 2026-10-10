@@ -19,7 +19,7 @@ const widths=[360,390,768,1024,1366,1440,1920];
 // @charset pertence ao CSS externo; deve ser removido ao embutir em HTML.
 const css=readFileSync('public/styles.css','utf8').replace(/^\uFEFF?@charset "UTF-8";\s*/u,'');
 const source=readFileSync('public/app.js','utf8').replace('export {};','').replace(/boot\(\);\s*$/u,'');
-const db=openDb(':memory:');seed(db);
+const db=openDb(':memory:');await seed(db);
 const server=createApp(db);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base='http://127.0.0.1:'+server.address().port;
 let cookie='';
@@ -55,15 +55,15 @@ try {
     ['configuracoes','/settings',()=>ui.settingsPage()],['exportacao','/export',()=>ui.exportPage()],
     ['auditoria','/audit',()=>ui.auditPage()]
   ])await page(name,path,render());
-  const submitted=db.prepare("SELECT id FROM projects WHERE status='submitted'").get();
+  const submitted=await db.prepare("SELECT id FROM projects WHERE status='submitted'").get();
   await page('anonimizacao','/projects/'+submitted.id,ui.projectDetail(submitted.id));
   await login('participante1@blindpitch.demo');
   await page('participante','/dashboard',ui.projectsPage());await page('nova-proposta','/projects/new',ui.projectForm());
-  const own=db.prepare('SELECT project_id FROM project_authors WHERE user_id=? LIMIT 1').get(ui.state.user.id);
+  const own=await db.prepare('SELECT project_id FROM project_authors WHERE user_id=? LIMIT 1').get(ui.state.user.id);
   await page('detalhes','/projects/'+own.project_id,ui.projectDetail(own.project_id));
   await login('avaliador1@blindpitch.demo');
   await page('avaliador','/dashboard',ui.reviewerDashboard());await page('historico','/history',ui.reviewerDashboard(true));
-  const assignment=db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=? AND status='pending'").get(ui.state.user.id);
+  const assignment=await db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=? AND status='pending'").get(ui.state.user.id);
   await page('avaliacao','/reviews/'+assignment.id,ui.reviewPage(assignment.id));
   await page('vazio','/dashboard',ui.empty('Sua próxima ideia começa aqui.','Crie uma proposta para participar da edição.','<a class="button primary" href="#/projects/new">Criar proposta</a>'));
   // Captura o HTML produzido pelas funções reais de confirmação/operação.
@@ -75,7 +75,7 @@ try {
   ui.operationFlow('proposal',()=>new Promise(()=>{}));
   pages.push({name:'envio',html:ui.shell('<dialog class="'+dialog.className+'">'+dialog.innerHTML+'</dialog>','/dashboard')});
   // Fixture visual do estado final; a execução assíncrona é testada em experience.test.mjs.
-  const code=db.prepare('SELECT anonymous_code FROM projects WHERE anonymous_code IS NOT NULL LIMIT 1').get().anonymous_code;
+  const code=(await db.prepare('SELECT anonymous_code FROM projects WHERE anonymous_code IS NOT NULL LIMIT 1').get()).anonymous_code;
   const successHtml=dialog.innerHTML.replace('Aguardando confirmação do servidor…','Projeto enviado com sucesso ✓')
     .replace('<p class="operation-code" hidden></p>','<p class="operation-code">'+code+'</p>')
     .replace('class="protected-caption" hidden','class="protected-caption"')

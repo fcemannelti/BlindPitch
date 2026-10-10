@@ -1,0 +1,217 @@
+
+/* ==========================================================================
+   Camada do celular
+   --------------------------------------------------------------------------
+   Organizada por preocupação, não por tela, para continuar-grow sem bagunça:
+
+   1. Navegação   — menu recolhível no lugar da rolagem horizontal
+   2. Tabelas     — cartões legíveis no lugar de colunas espremidas
+   3. Toque       — alvos confortáveis (mínimo 44px)
+   4. Legibilidade— piso de 11px para todo texto no celular
+   5. Cabeçalho   — duas linhas em vez de três quebradas
+
+   As media queries antigas acima continuam valendo: esta camada apenas
+   completa o que faltava e sobrepõe o que ficou ruim.
+   ========================================================================== */
+
+/* ---------- 1. Navegação ------------------------------------------------ */
+/* O botão só existe no celular; no desktop o menu já está sempre visível. */
+.nav-toggle{display:none}
+
+@media(max-width:900px){
+  .nav-toggle{
+    display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:0 14px;
+    border:1px solid var(--border);border-radius:var(--radius-sm);
+    background:var(--surface-alt);color:var(--text);
+    font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+    position:absolute;top:13px;right:var(--gutter);z-index:2;
+  }
+  .nav-toggle svg{width:18px;height:18px;flex-shrink:0}
+  .nav-toggle:hover{background:var(--surface-hover)}
+  .nav-toggle[aria-expanded="true"]{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .nav-toggle[aria-expanded="true"]:hover{background:var(--primary-hover)}
+
+  /* Fechado, o menu ocupa só a linha da marca. Aberto, revela todos os itens. */
+  .sidebar .brand{margin:0;padding-right:112px;font-size:21px;min-height:44px}
+  .sidebar nav,.sidebar .logout{display:none}
+  body.nav-open .sidebar nav,body.nav-open .sidebar .logout{display:flex}
+
+  .sidebar nav{
+    flex-direction:column;gap:2px;margin:12px 0 0;padding:2px 0 8px;
+    overflow:visible;overscroll-behavior:contain;
+  }
+  .nav-item{
+    min-height:48px;width:100%;padding:12px 14px;font-size:15px;
+    white-space:normal;align-items:center;
+  }
+  .nav-item svg{width:19px;height:19px}
+  /* Indicador de página ativa vira uma barra na direita da linha. */
+  .nav-item::before{left:auto;right:0;top:10px;bottom:10px;width:2px;height:auto}
+  .nav-item.active{background:var(--surface-alt)}
+
+  .logout{
+    position:static;margin:0;width:100%;min-height:48px;padding:12px 14px;
+    font-size:14px;border-top:1px solid var(--border);border-radius:0;
+  }
+  .logout svg{width:18px;height:18px}
+}
+
+/* ---------- 2. Tabelas -------------------------------------------------- */
+/* Com duas ou mais colunas, rolar na horizontal esconde a informação. No
+   celular cada linha vira um cartão e o rótulo da coluna reaparece em cada
+   célula — nenhum dado é perdido e nenhum cabeçalho fica órfão. */
+@media(max-width:700px){
+  .table-scroll{overflow:visible;border:0;border-radius:0}
+  .table-scroll table,.table-scroll tbody,.table-scroll tr,.table-scroll td{
+    display:block;width:100%;min-width:0;
+  }
+  /* O cabeçalho continua no DOM para leitores de tela, fora da vista. Cada
+     célula precisa receber o mesmo recorte: um `th` solto continuaria laid
+     out na largura da coluna e voltaria a esticar a página. */
+  .table-scroll thead{
+    position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;
+    overflow:hidden;clip-path:inset(50%);white-space:nowrap;
+  }
+  .table-scroll thead tr,.table-scroll thead th{
+    position:absolute;left:0;top:0;width:1px;height:1px;margin:-1px;padding:0;
+    overflow:hidden;clip-path:inset(50%);white-space:nowrap;
+  }
+  .table-scroll tbody tr{
+    border:1px solid var(--border);border-radius:var(--radius-sm);
+    background:var(--surface);padding:4px 15px;margin-bottom:10px;
+  }
+  .table-scroll tbody tr:last-child{margin-bottom:0}
+  .table-scroll td{
+    display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+    padding:11px 0;border-bottom:1px solid var(--border);text-align:right;
+  }
+  .table-scroll tbody tr td:last-child{border-bottom:0;padding-bottom:13px}
+  .table-scroll tbody tr td:first-child{padding-top:13px}
+  .table-scroll td::before{
+    content:attr(data-label);flex:0 0 auto;max-width:46%;
+    text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--text-muted);line-height:1.5;
+  }
+  .table-scroll td>*{min-width:0;max-width:100%}
+  .table-scroll td .table-title{max-width:none;min-width:0}
+  .table-scroll td:last-child .button{white-space:normal}
+  .table-scroll code{overflow-wrap:anywhere}
+  .request-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+  .request-actions>.button{flex:1 1 auto;min-width:118px}
+}
+
+/* ---------- 3. Alvos de toque ------------------------------------------- */
+/* Vale já no tablet: 768px ainda é tela de toque, não de mouse. */
+@media(max-width:900px){
+  .brand{min-height:44px}
+  .theme-toggle{width:44px;height:44px}
+  summary,details.panel>summary{min-height:44px;display:flex;align-items:center;gap:8px}
+  .demo-accounts summary{min-height:44px}
+  .public-header nav>a:not(.button){min-height:44px;display:inline-flex;align-items:center}
+  .public-header-actions>.button{min-height:44px;display:inline-flex;align-items:center}
+  /* O alvo do checkbox e o rotulo inteiro, nao o quadradinho. */
+  .check-label{min-height:44px;align-items:center}
+  .choice{min-height:52px}
+  /* Links curtos que vivem no titulo de um painel ou no fim de um bloco. */
+  .panel-heading>a,.research-note>a,.panel>a:not(.button){
+    min-height:40px;display:inline-flex;align-items:center;gap:7px;
+  }
+  .button.small{min-height:40px}
+}
+
+/* ---------- 4. Legibilidade no celular ---------------------------------- */
+/* Piso de 11px: abaixo disso o texto perde forma em tela pequena. */
+@media(max-width:900px){
+  .eyebrow{font-size:11px}
+  .auth-identity .eyebrow{font-size:11px}
+  .demo-pill{font-size:11px;padding:2px 7px}
+  .tag{font-size:11px}
+  .public-stats dt{font-size:11px}
+  .rank-row>b small{font-size:11px}
+}
+@media(max-width:640px){
+  .account strong{font-size:11.5px}
+  .account small{font-size:11px}
+  .column small{font-size:11px}
+  th{font-size:11px}
+}
+
+/* ---------- 5. Cabeçalho público ---------------------------------------- *//* Marca e ações na primeira linha, links numa faixa rolável na segunda.
+   Antes eram três linhas quebradas, com o botão de tema sozinho na última. */
+.public-header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.public-header nav{margin-left:auto}
+
+@media(max-width:640px){
+  .public-header{flex-wrap:wrap;gap:11px;padding-block:14px}
+  .public-header-actions{margin-left:auto;order:2}
+  .public-header nav{
+    order:3;width:100%;margin-left:0;gap:18px;
+    flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;
+    padding-bottom:2px;scrollbar-width:none;-ms-overflow-style:none;
+  }
+  .public-header nav::-webkit-scrollbar{display:none}
+  .public-header nav>a:not(.button){
+    min-height:44px;display:inline-flex;align-items:center;flex-shrink:0;
+  }
+  .public-header-actions>.button{min-height:44px;padding:11px 14px;font-size:12.5px}
+  .public-header-actions>.button svg{display:none}
+
+  /* O caminho da tela não pode quebrar em duas linhas no meio da frase. */
+  .breadcrumb{max-width:none;flex:1 1 auto;min-width:0;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+
+/* Telas muito estreitas: marca, ação principal e alternância de tema disputam
+   a primeira linha. A marca cede um ponto de fonte para que os três caibam
+   juntos — assim o botão de tema nunca fica órfão na borda esquerda, e a dica
+   flutuante dele, ancorada à direita, permanece dentro da tela. */
+@media(max-width:400px){
+  .public-header{gap:10px}
+  .public-header-actions{display:contents}
+  .public-header .brand{font-size:18px}
+  .public-header-actions>.button{order:1;min-height:44px;padding:11px 13px}
+  .public-header-actions>.theme-toggle{order:2}
+  /* base 0, e nao auto: a quebra de linha usa o tamanho hipotetico, e um nav
+     com base igual ao conteudo nunca dividiria a linha com o botao de tema.
+     Com base 0 ele cresce so no espaco que sobra e rola por dentro. */
+  .public-header nav{order:3;width:auto;flex:1 1 0;min-width:0}
+}
+
+/* ---------- 6. Formulários e diálogos ----------------------------------- */
+/* O teclado virtual ocupa boa parte da tela: o diálogo de confirmação precisa
+   caber inteiro, e os campos não podem ficar com menos de 16px (o iOS reduz
+   ao detectar fonte pequena e provoca zoom ao focar). */
+@media(max-width:640px){
+  .operation-dialog,.confirm-dialog{
+    max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;
+  }
+  .confirm-actions{position:sticky;bottom:0;background:var(--surface);padding-top:8px}
+  .confirm-actions>.button{min-height:46px}
+  .form-footer>.button{min-height:46px}
+  .wizard-actions>.button{min-height:46px}
+  .inline-form>.button{min-height:46px}
+  .assignment-form>.button{min-height:46px}
+  .publication-actions>.button{min-height:46px}
+  .request-actions>.button{min-height:46px}
+
+  /* 16px em todo campo: abaixo disso o iOS aplica zoom ao focar. As regras
+     do assistente, das notas e do seletor de edição têm especificidade maior
+     que a regra geral, então precisam ser reaffirmadas aqui. */
+  input,select,textarea,
+  .wizard-step input,.wizard-step textarea,
+  .score-label input,.score-input,.criterion-comment input,
+  .edition-picker select{font-size:16px}
+  input::placeholder,textarea::placeholder{font-size:14px}
+}
+
+/* ---------- 7. Utilidades ----------------------------------------------- */
+/* Rede de segurança: nunca deixar a página vazar na horizontal. */
+@media(max-width:900px){
+  body{overflow-x:hidden}
+  img,svg,video,canvas{max-width:100%}
+}
+
+/* ---------- 8. Movimento reduzido --------------------------------------- */
+/* O menu abre sem animação quando o sistema pede menos movimento. */
+@media(prefers-reduced-motion:reduce){
+  .nav-toggle,.nav-item,.sidebar nav{transition:none!important}
+}

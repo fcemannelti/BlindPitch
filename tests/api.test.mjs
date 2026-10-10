@@ -6,7 +6,7 @@ import { createApp } from '../server/app.mjs';
 import { scientificFields } from '../server/validation.mjs';
 
 let db,server,base;
-before(async()=>{db=openDb(':memory:');seed(db);server=createApp(db);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;});
+before(async()=>{db=openDb(':memory:');await seed(db);server=createApp(db);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;});
 after(async()=>{await new Promise(resolve=>server.close(resolve));db.close();});
 async function client(email,password=demoPassword) {
   const auth=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
@@ -116,7 +116,7 @@ test('nova edição, pesos, códigos persistentes, consentimento e limites de es
   assert.equal((await o(at('/metrics'))).data.demo_notice,null);
   const reviewerAdded=await o('/reviewers','POST',{name:'Nova Avaliadora',email:'nova@example.test',password:'SenhaLonga2026!',consent:false,school_or_class:''});assert.equal(reviewerAdded.status,200);
   assert.equal((await o(`/reviewers/${reviewerAdded.data.id}`,'PUT',{active:false})).status,200);
-  assert.equal(db.prepare('SELECT COUNT(*) n,COUNT(DISTINCT anonymous_code) distinct_n FROM projects WHERE anonymous_code IS NOT NULL').get().n,db.prepare('SELECT COUNT(DISTINCT anonymous_code) n FROM projects WHERE anonymous_code IS NOT NULL').get().n);
+  assert.equal((await db.prepare('SELECT COUNT(*) n,COUNT(DISTINCT anonymous_code) distinct_n FROM projects WHERE anonymous_code IS NOT NULL').get()).n,(await db.prepare('SELECT COUNT(DISTINCT anonymous_code) n FROM projects WHERE anonymous_code IS NOT NULL').get()).n);
 });
 
 test('recursos públicos, cabeçalhos e proteção de arquivos',async()=>{

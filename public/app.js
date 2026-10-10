@@ -35,6 +35,7 @@ const fieldHelp = {
   references:'Informe fontes consultadas. Evite assinaturas, links pessoais e referências que revelem a autoria.'
 };
 const icons = {
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
   people:'<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M17 13a5 5 0 0 1 4 5v3"/>',
@@ -179,9 +180,23 @@ function animatePage() {
   };
   animationFrame=requestAnimationFrame(frame);
 }
+let navDismissBound=false;
 let validationId=0;
 function enhancePage() {
   document.querySelectorAll('.table-scroll').forEach(table=>{table.setAttribute('tabindex','0');table.setAttribute('role','region');table.setAttribute('aria-label','Tabela com rolagem horizontal');});
+  // No celular a tabela vira lista de cartoes e o cabecalho deixa de ser
+  // exibido: cada celula passa a carregar o rotulo da coluna que substitui.
+  // Derivar do proprio cabecalho evita duplicar os titulos em cada template.
+  document.querySelectorAll('.table-scroll table').forEach(table=>{
+    const headers=[...table.querySelectorAll('thead th')].map(head=>head.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(row=>{
+      [...row.children].forEach((cell,index)=>{
+        if(!(cell instanceof HTMLElement))return;
+        const label=headers[index]||'';
+        if(label&&!cell.dataset.label)cell.dataset.label=label;
+      });
+    });
+  });
   document.querySelectorAll('form').forEach(form=>{
     form.addEventListener('invalid',event=>{
       const input=event.target;if(!(input instanceof HTMLInputElement||input instanceof HTMLTextAreaElement||input instanceof HTMLSelectElement))return;
@@ -220,8 +235,8 @@ function editionPicker() {
   return state.events.length>1?`<label class="edition-picker"><span class="sr-only">Consultar edição</span><select data-event-select aria-label="Consultar edição">${state.events.map(event=>`<option value="${esc(event.id)}" ${event.id===state.event?.id?'selected':''}>${esc(event.name)} · ${event.year}</option>`).join('')}</select></label>`:`<span class="edition-tag"><i></i> ${esc(state.event?.name||'Edição científica')}</span>`;
 }
 function shell(content,path) {
-  if(!state.user) return `<a class="skip-link" href="#main" data-skip-link>Pular para o conteúdo</a><div class="public-shell"><header class="public-header"><a class="brand" href="#/">${logo()}<span>BlindPitch<span class="brand-dot">.</span></span></a><nav aria-label="Navegação pública"><a href="#/gallery">Galeria</a><a href="#/showcase">Vitrine</a><a href="#/reviewers-public">Avaliadores</a><a href="#/about">Sobre o projeto</a><a href="#/login">Entrar</a><a class="button primary small" href="#/register">Criar conta ${icon('arrow')}</a>${themeToggle()}</nav></header><main id="main">${content}</main><footer>BlindPitch · Ceará Faz Ciência 2026 <span>Ciência Delas · Primeiro a ideia. Depois, quem a criou.</span></footer></div>`;
-  return `<a class="skip-link" href="#main" data-skip-link>Pular para o conteúdo</a><div class="workspace"><aside class="sidebar"><a class="brand" href="#/dashboard">${logo()}<span>BlindPitch<span class="brand-dot">.</span></span></a><p class="sidebar-caption">ESPAÇO DO ${esc(roleNames[state.user.role].toUpperCase())}</p><nav aria-label="Navegação principal">${navigation().map(([name,href,img])=>`<a href="#${href}" class="nav-item ${path===href?'active':''}" ${path===href?'aria-current="page"':''}>${icon(img)}<span>${name}</span></a>`).join('')}</nav><div class="sidebar-bottom"><div class="science-label"><span class="tiny-dot"></span> CIÊNCIA DELAS</div><p>Uma ideia pode vir<br>de qualquer pessoa.</p><a href="#/about">Conheça a pesquisa ${icon('arrow')}</a></div><button class="logout" id="logout">${icon('logout')} Sair da conta</button></aside><div class="main-wrap"><header class="topbar"><span class="breadcrumb">Workspace <span>/</span> <strong>${esc(navigation().find(n=>n[1]===path)?.[0]||'Projeto')}</strong></span><div class="topbar-right">${themeToggle()}${editionPicker()}<div class="avatar">${esc(state.user.name.charAt(0))}</div><div class="account"><strong>${esc(state.user.name)}</strong><small>${esc(roleNames[state.user.role])}</small></div></div></header><main id="main" class="main-content">${content}</main><footer>BlindPitch © 2026 <span>Primeiro a ideia. Depois, quem a criou.</span></footer></div></div>`;
+  if(!state.user) return `<a class="skip-link" href="#main" data-skip-link>Pular para o conteúdo</a><div class="public-shell"><header class="public-header"><a class="brand" href="#/">${logo()}<span>BlindPitch<span class="brand-dot">.</span></span></a><nav aria-label="Navegação pública"><a href="#/gallery">Galeria</a><a href="#/showcase">Vitrine</a><a href="#/reviewers-public">Avaliadores</a><a href="#/about">Sobre o projeto</a><a href="#/login">Entrar</a></nav><div class="public-header-actions"><a class="button primary small" href="#/register">Criar conta ${icon('arrow')}</a>${themeToggle()}</div></header><main id="main">${content}</main><footer>BlindPitch · Ceará Faz Ciência 2026 <span>Ciência Delas · Primeiro a ideia. Depois, quem a criou.</span></footer></div>`;
+  return `<a class="skip-link" href="#main" data-skip-link>Pular para o conteúdo</a><div class="workspace"><aside class="sidebar"><a class="brand" href="#/dashboard">${logo()}<span>BlindPitch<span class="brand-dot">.</span></span></a><button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="main-nav"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="nav-toggle-text">Menu</span></button><p class="sidebar-caption">ESPAÇO DO ${esc(roleNames[state.user.role].toUpperCase())}</p><nav id="main-nav" class="sidebar-nav" aria-label="Navegação principal">${navigation().map(([name,href,img])=>`<a href="#${href}" class="nav-item ${path===href?'active':''}" ${path===href?'aria-current="page"':''}>${icon(img)}<span>${name}</span></a>`).join('')}</nav><div class="sidebar-bottom"><div class="science-label"><span class="tiny-dot"></span> CIÊNCIA DELAS</div><p>Uma ideia pode vir<br>de qualquer pessoa.</p><a href="#/about">Conheça a pesquisa ${icon('arrow')}</a></div><button class="logout" id="logout">${icon('logout')} Sair da conta</button></aside><div class="main-wrap"><header class="topbar"><span class="breadcrumb">Workspace <span>/</span> <strong>${esc(navigation().find(n=>n[1]===path)?.[0]||'Projeto')}</strong></span><div class="topbar-right">${themeToggle()}${editionPicker()}<div class="avatar">${esc(state.user.name.charAt(0))}</div><div class="account"><strong>${esc(state.user.name)}</strong><small>${esc(roleNames[state.user.role])}</small></div></div></header><main id="main" class="main-content">${content}</main><footer>BlindPitch © 2026 <span>Primeiro a ideia. Depois, quem a criou.</span></footer></div></div>`;
 }
 const logo = () => '<span class="logo-mark">b<span>p</span></span>';
 function publicHome() {
@@ -682,6 +697,40 @@ function submitHandler(selector,handler) {
 function bind(path) {
   bindProjectWizard();
   $('#logout')?.addEventListener('click',logout);
+  // Menu compacto do celular. Com doze itens, a lista rolagem horizontal
+  // escondia quase tudo; aqui ela abre inteira, sem tirar nenhum destino.
+  const navToggle=$('#nav-toggle'),mainNav=$('#main-nav');
+  if(navToggle&&mainNav) {
+    const setNavOpen=open=>{navToggle.setAttribute('aria-expanded',String(open));document.body.classList.toggle('nav-open',open);};
+    setNavOpen(false);
+    navToggle.addEventListener('click',()=>setNavOpen(navToggle.getAttribute('aria-expanded')!=='true'));
+    mainNav.addEventListener('click',event=>{
+      if(!(event.target instanceof Element))return;
+      if(event.target.closest('a'))setNavOpen(false);
+    });
+    // Escape e o clique fora fecham o menu mesmo com o foco em qualquer lugar.
+    // Listener no documento, registrado uma vez: `bind()` roda a cada tela e
+    // um listener por renderizacao acumularia execucoes duplicadas.
+    if(!navDismissBound){
+      navDismissBound=true;
+      document.addEventListener('keydown',event=>{
+        if(event.key!=='Escape')return;
+        const toggle=document.querySelector('#nav-toggle');
+        if(!toggle||toggle.getAttribute('aria-expanded')!=='true')return;
+        toggle.setAttribute('aria-expanded','false');
+        document.body.classList.remove('nav-open');
+        if(toggle instanceof HTMLElement)toggle.focus();
+      });
+      document.addEventListener('click',event=>{
+        const toggle=document.querySelector('#nav-toggle');
+        if(!toggle||toggle.getAttribute('aria-expanded')!=='true')return;
+        if(!(event.target instanceof Element))return;
+        if(event.target.closest('#nav-toggle')||event.target.closest('#main-nav')||event.target.closest('.logout'))return;
+        toggle.setAttribute('aria-expanded','false');
+        document.body.classList.remove('nav-open');
+      });
+    }
+  }
   $('#consent-button')?.addEventListener('click',async()=>{
     if(!await confirmAction('Você leu o protocolo e autoriza a exibição de nome e escola/turma aos avaliadores da condição identificada desta edição?'))return;
     await buttonAction($('#consent-button'),async()=>{const result=await api('/consent','POST',{consent:true});notify(result.message);await render();},'Registrando…');

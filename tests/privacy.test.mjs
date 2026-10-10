@@ -7,7 +7,7 @@ import { createApp } from '../server/app.mjs';
 async function scenario() {
   const db = openDb(':memory:');
   const { seed, demoPassword } = await import('../server/seed.mjs');
-  seed(db);
+  await seed(db);
   const server = createApp(db);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -41,7 +41,7 @@ test('cadastro registra o pedido de avaliador sem conceder o papel', async () =>
     const data = await response.json();
     assert.equal(data.reviewer_request, true);
     // O papel só muda por decisão do organizador, nunca pela escolha no cadastro.
-    assert.equal(db.prepare("SELECT role FROM users WHERE email='nova@exemplo.test'").get().role, 'participant');
+    assert.equal((await db.prepare("SELECT role FROM users WHERE email='nova@exemplo.test'").get()).role, 'participant');
   } finally { await close(); }
 });
 
@@ -49,9 +49,9 @@ test('auto-cadastro como avaliador não altera o papel armazenado', async () => 
   const { db, base, close } = await scenario();
   try {
     await fetch(`${base}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Falsa Avaliadora', email: 'falsa@exemplo.test', password: 'senha-suficiente-123', school_or_class: '', consent: false, wants_to_review: true }) });
-    const user = db.prepare('SELECT role FROM users WHERE email=?').get('falsa@exemplo.test');
+    const user = await db.prepare('SELECT role FROM users WHERE email=?').get('falsa@exemplo.test');
     assert.equal(user.role, 'participant', 'escolher avaliador não pode conceder o papel');
-    const request = db.prepare('SELECT status FROM reviewer_requests WHERE user_id=?').get(db.prepare('SELECT id FROM users WHERE email=?').get('falsa@exemplo.test').id);
+    const request = await db.prepare('SELECT status FROM reviewer_requests WHERE user_id=?').get((await db.prepare('SELECT id FROM users WHERE email=?').get('falsa@exemplo.test')).id);
     assert.equal(request.status, 'pending');
   } finally { await close(); }
 });
@@ -60,16 +60,16 @@ test('recusa de pedido não promove ninguém e fica registrada', async () => {
   const { db, base, login, call, close } = await scenario();
   try {
     await fetch(`${base}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Pedido Recusado', email: 'recusada@exemplo.test', password: 'senha-suficiente-123', school_or_class: '', consent: false, wants_to_review: true }) });
-    const user = db.prepare("SELECT id FROM users WHERE email='recusada@exemplo.test'").get();
+    const user = await db.prepare("SELECT id FROM users WHERE email='recusada@exemplo.test'").get();
     // Um valor que não seja booleano é recusado, para não virar aprovação por engano.
     await login('organizador@blindpitch.demo');
     assert.equal((await call('organizador@blindpitch.demo', 'PUT', `/reviewer-requests/${user.id}`, { approve: 'sim' })).status, 400);
     const rejected = await call('organizador@blindpitch.demo', 'PUT', `/reviewer-requests/${user.id}`, { approve: false });
     assert.equal(rejected.status, 200);
-    assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get(user.id).role, 'participant', 'recusa não concede o papel');
-    assert.equal(db.prepare('SELECT status FROM reviewer_requests WHERE user_id=?').get(user.id).status, 'rejected');
-    assert.equal(db.prepare('SELECT count(*) n FROM audit_logs WHERE action=?').get('reviewer.request.rejected').n, 1, 'recusa deve ser auditada');
-    assert.equal(db.prepare('SELECT count(*) n FROM reviewer_profiles WHERE user_id=?').get(user.id).n, 0, 'sem perfil de avaliador criado');
+    assert.equal((await db.prepare('SELECT role FROM users WHERE id=?').get(user.id)).role, 'participant', 'recusa não concede o papel');
+    assert.equal((await db.prepare('SELECT status FROM reviewer_requests WHERE user_id=?').get(user.id)).status, 'rejected');
+    assert.equal((await db.prepare('SELECT count(*) n FROM audit_logs WHERE action=?').get('reviewer.request.rejected')).n, 1, 'recusa deve ser auditada');
+    assert.equal((await db.prepare('SELECT count(*) n FROM reviewer_profiles WHERE user_id=?').get(user.id)).n, 0, 'sem perfil de avaliador criado');
     // Decidido duas vezes é negado.
     assert.equal((await call('organizador@blindpitch.demo', 'PUT', `/reviewer-requests/${user.id}`, { approve: false })).status, 400);
   } finally { await close(); }
@@ -79,18 +79,18 @@ test('promoção a avaliador exige organizador e encerra a sessão', async () =>
   const { db, login, call, close } = await scenario();
   try {
     await login('participante1@blindpitch.demo');
-    const participant = db.prepare("SELECT id FROM users WHERE email='participante1@blindpitch.demo'").get();
-    db.prepare('INSERT INTO reviewer_requests(user_id,status) VALUES(?,?)').run(participant.id, 'pending');
+    const participant = await db.prepare("SELECT id FROM users WHERE email='participante1@blindpitch.demo'").get();
+    await db.prepare('INSERT INTO reviewer_requests(user_id,status) VALUES(?,?)').run(participant.id, 'pending');
     // O próprio participante não pode se promover.
     const self = await call('participante1@blindpitch.demo', 'PUT', `/reviewer-requests/${participant.id}`, { approve: true });
     assert.equal(self.status, 403);
     await login('organizador@blindpitch.demo');
     const approved = await call('organizador@blindpitch.demo', 'PUT', `/reviewer-requests/${participant.id}`, { approve: true });
     assert.equal(approved.status, 200);
-    assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get(participant.id).role, 'reviewer');
-    assert.equal(db.prepare('SELECT count(*) n FROM audit_logs WHERE action=?').get('reviewer.request.approved').n, 1, 'promoção deve ser auditada');
+    assert.equal((await db.prepare('SELECT role FROM users WHERE id=?').get(participant.id)).role, 'reviewer');
+    assert.equal((await db.prepare('SELECT count(*) n FROM audit_logs WHERE action=?').get('reviewer.request.approved')).n, 1, 'promoção deve ser auditada');
     // A sessão anterior foi encerrada por segurança.
-    assert.equal(db.prepare('SELECT count(*) n FROM sessions WHERE user_id=?').get(participant.id).n, 0);
+    assert.equal((await db.prepare('SELECT count(*) n FROM sessions WHERE user_id=?').get(participant.id)).n, 0);
   } finally { await close(); }
 });
 
@@ -116,11 +116,11 @@ test('portfólio anônimo não expõe nome, e-mail, escola nem código anônimo'
   const { db, base, login, call, close } = await scenario();
   try {
     await login('participante1@blindpitch.demo');
-    const project = db.prepare("SELECT p.id,p.anonymous_code FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
+    const project = await db.prepare("SELECT p.id,p.anonymous_code FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
     // Publica com identidade totalmente protegida.
     await call('participante1@blindpitch.demo', 'PUT', '/privacy', { identification: 'never', public_name: '', public_bio: '' });
     await call('participante1@blindpitch.demo', 'PUT', `/projects/${project.id}/publication`, { targets: { portfolio: true, gallery: true, showcase: true } });
-    db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
+    await db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
 
     const gallery = await (await fetch(`${base}/api/public/gallery`)).json();
     const entry = gallery.projects.find(p => p.title);
@@ -148,8 +148,8 @@ test('identidade só aparece publicamente quando autorizada e liberada', async (
   const { db, base, login, call, close } = await scenario();
   try {
     await login('participante1@blindpitch.demo');
-    const project = db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
-    db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
+    const project = await db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
+    await db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
     await call('participante1@blindpitch.demo', 'PUT', `/projects/${project.id}/publication`, { targets: { portfolio: true } });
 
     // O endereço vem do token, nunca do nome — inclusive quando o nome está autorizado.
@@ -157,7 +157,7 @@ test('identidade só aparece publicamente quando autorizada e liberada', async (
 
     // 'never' nunca revela, mesmo com reveal_identity ligado na edição.
     await call('participante1@blindpitch.demo', 'PUT', '/privacy', { identification: 'never', public_name: 'Nome Oculto', public_bio: '' });
-    db.prepare('UPDATE events SET reveal_identity=1').run();
+    await db.prepare('UPDATE events SET reveal_identity=1').run();
     let portfolio = await (await fetch(`${base}/api/public/portfolio/${slug}`)).json();
     assert.equal(portfolio.anonymous, true, 'preferência never deve manter o portfólio anônimo');
     assert.equal(portfolio.name, null);
@@ -178,27 +178,27 @@ test('projeto sem destino selecionado, não aprovado ou arquivado não é public
   const { db, base, login, call, close } = await scenario();
   try {
     await login('participante1@blindpitch.demo');
-    const project = db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
-    const title = db.prepare('SELECT title FROM projects WHERE id=?').get(project.id).title;
+    const project = await db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
+    const title = (await db.prepare('SELECT title FROM projects WHERE id=?').get(project.id)).title;
 
     // Sem destinos, mesmo aprovado, não aparece.
-    db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
+    await db.prepare('UPDATE projects SET anonymization_approved=1,status=? WHERE id=?').run('reviewed', project.id);
     let gallery = await (await fetch(`${base}/api/public/gallery`)).json();
     assert.ok(!gallery.projects.some(p => p.title === title), 'sem destino não publica');
 
     // Com destino, mas sem aprovação da anonimização, continua fora.
     await call('participante1@blindpitch.demo', 'PUT', `/projects/${project.id}/publication`, { targets: { gallery: true } });
-    db.prepare('UPDATE projects SET anonymization_approved=0').run();
+    await db.prepare('UPDATE projects SET anonymization_approved=0').run();
     gallery = await (await fetch(`${base}/api/public/gallery`)).json();
     assert.ok(!gallery.projects.some(p => p.title === title), 'sem aprovação não publica');
 
     // Rascunho nunca publica.
-    db.prepare("UPDATE projects SET anonymization_approved=1,status='draft' WHERE id=?").run(project.id);
+    await db.prepare("UPDATE projects SET anonymization_approved=1,status='draft' WHERE id=?").run(project.id);
     gallery = await (await fetch(`${base}/api/public/gallery`)).json();
     assert.ok(!gallery.projects.some(p => p.title === title), 'rascunho não publica');
 
     // Arquivado nunca publica.
-    db.prepare("UPDATE projects SET status='archived' WHERE id=?").run(project.id);
+    await db.prepare("UPDATE projects SET status='archived' WHERE id=?").run(project.id);
     gallery = await (await fetch(`${base}/api/public/gallery`)).json();
     assert.ok(!gallery.projects.some(p => p.title === title), 'arquivado não publica');
   } finally { await close(); }
@@ -208,9 +208,9 @@ test('destinos de publicação são independentes por projeto', async () => {
   const { db, base, login, call, close } = await scenario();
   try {
     await login('participante1@blindpitch.demo');
-    const projects = db.prepare("SELECT p.id,p.title FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 2").all();
+    const projects = await db.prepare("SELECT p.id,p.title FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 2").all();
     if (projects.length < 2) return;
-    for (const p of projects) db.prepare("UPDATE projects SET anonymization_approved=1,status='reviewed' WHERE id=?").run(p.id);
+    for (const p of projects) await db.prepare("UPDATE projects SET anonymization_approved=1,status='reviewed' WHERE id=?").run(p.id);
     await call('participante1@blindpitch.demo', 'PUT', `/projects/${projects[0].id}/publication`, { targets: { gallery: true } });
     await call('participante1@blindpitch.demo', 'PUT', `/projects/${projects[1].id}/publication`, { targets: { showcase: true } });
     const gallery = await (await fetch(`${base}/api/public/gallery`)).json();
@@ -227,7 +227,7 @@ test('participante não altera destinos de projeto alheio', async () => {
   try {
     await login('participante1@blindpitch.demo');
     await login('participante2@blindpitch.demo');
-    const other = db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
+    const other = await db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
     const forbidden = await call('participante2@blindpitch.demo', 'PUT', `/projects/${other.id}/publication`, { targets: { gallery: true } });
     assert.equal(forbidden.status, 404, 'acesso horizontal deve ser bloqueado');
   } finally { await close(); }
@@ -237,9 +237,9 @@ test('pontos adicionais exigem justificativa e respeitam o limite da edição', 
   const { db, login, call, close } = await scenario();
   try {
     await login('avaliador1@blindpitch.demo');
-    const assignment = db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=(SELECT id FROM users WHERE email='avaliador1@blindpitch.demo') AND status<>'completed' LIMIT 1").get();
+    const assignment = await db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=(SELECT id FROM users WHERE email='avaliador1@blindpitch.demo') AND status<>'completed' LIMIT 1").get();
     if (!assignment) return;
-    const criteria = db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
+    const criteria = await db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
     const full = criteria.map(c => ({ criterion_id: c.id, score: 5, comment: '' }));
 
     // Sem justificativa, o servidor recusa mesmo que a interface permita enviar.
@@ -251,14 +251,14 @@ test('pontos adicionais exigem justificativa e respeitam o limite da edição', 
     assert.equal(attempt.status, 400);
 
     // Acima do limite configurado.
-    db.prepare('UPDATE events SET bonus_max=2').run();
+    await db.prepare('UPDATE events SET bonus_max=2').run();
     attempt = await call('avaliador1@blindpitch.demo', 'PUT', `/assignments/${assignment.id}/review`, { scores: full, general_comment: '', finalize: false, bonus: { points: 9, justification: 'Mérito extraordinário justificado.', criterion: '' } });
     assert.equal(attempt.status, 400);
 
     // Válido: registra e calcula a nota final.
     const ok = await call('avaliador1@blindpitch.demo', 'PUT', `/assignments/${assignment.id}/review`, { scores: full, general_comment: 'Comentário', finalize: true, bonus: { points: 1.5, justification: 'Método replicável com controle adequado.', criterion: 'Metodologia' } });
     assert.equal(ok.status, 200, JSON.stringify(ok.data));
-    const review = db.prepare('SELECT r.* FROM reviews r JOIN assignments a ON a.id=r.assignment_id WHERE a.id=?').get(assignment.id);
+    const review = await db.prepare('SELECT r.* FROM reviews r JOIN assignments a ON a.id=r.assignment_id WHERE a.id=?').get(assignment.id);
     assert.equal(review.bonus_points, 1.5);
     assert.ok(review.bonus_justification.length > 0);
     assert.ok(review.bonus_granted_by, 'deve registrar quem concedeu');
@@ -273,12 +273,12 @@ test('pontos adicionais são zerados quando a seção fica vazia', async () => {
   const { db, login, call, close } = await scenario();
   try {
     await login('avaliador2@blindpitch.demo');
-    const assignment = db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=(SELECT id FROM users WHERE email='avaliador2@blindpitch.demo') AND status<>'completed' LIMIT 1").get();
+    const assignment = await db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=(SELECT id FROM users WHERE email='avaliador2@blindpitch.demo') AND status<>'completed' LIMIT 1").get();
     if (!assignment) return;
-    const criteria = db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
+    const criteria = await db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
     const ok = await call('avaliador2@blindpitch.demo', 'PUT', `/assignments/${assignment.id}/review`, { scores: criteria.map(c => ({ criterion_id: c.id, score: 4, comment: '' })), general_comment: '', finalize: false, bonus: { points: 0, justification: '', criterion: '' } });
     assert.equal(ok.status, 200);
-    const review = db.prepare('SELECT r.bonus_points,r.bonus_justification FROM reviews r JOIN assignments a ON a.id=r.assignment_id WHERE a.id=?').get(assignment.id);
+    const review = await db.prepare('SELECT r.bonus_points,r.bonus_justification FROM reviews r JOIN assignments a ON a.id=r.assignment_id WHERE a.id=?').get(assignment.id);
     assert.equal(review.bonus_points, 0);
     assert.equal(review.bonus_justification, '');
   } finally { await close(); }
@@ -288,14 +288,14 @@ test('justificativa de pontos é removida de identificadores na avaliação anô
   const { db, login, call, close } = await scenario();
   try {
     // Usa a atribuição anônima real e o autor REAL dela: o nome cit��do é o do dono do projeto.
-    const assignment = db.prepare("SELECT a.id,a.project_id,a.reviewer_user_id FROM assignments a JOIN projects p ON p.id=a.project_id WHERE a.review_mode='anonymous' AND a.status<>'completed' AND p.anonymization_approved=1 LIMIT 1").get();
+    const assignment = await db.prepare("SELECT a.id,a.project_id,a.reviewer_user_id FROM assignments a JOIN projects p ON p.id=a.project_id WHERE a.review_mode='anonymous' AND a.status<>'completed' AND p.anonymization_approved=1 LIMIT 1").get();
     if (!assignment) return;
-    const author = db.prepare('SELECT u.name FROM project_authors a JOIN users u ON u.id=a.user_id WHERE a.project_id=?').get(assignment.project_id);
-    db.prepare("INSERT OR IGNORE INTO privacy_profiles(user_id,identification) SELECT id,'never' FROM users WHERE id=?").run(author.id ? db.prepare('SELECT user_id FROM project_authors WHERE project_id=?').get(assignment.project_id).user_id : '');
-    const reviewerEmail = db.prepare('SELECT email FROM users WHERE id=?').get(assignment.reviewer_user_id).email;
+    const author = await db.prepare('SELECT u.name FROM project_authors a JOIN users u ON u.id=a.user_id WHERE a.project_id=?').get(assignment.project_id);
+    await db.prepare("INSERT OR IGNORE INTO privacy_profiles(user_id,identification) SELECT id,'never' FROM users WHERE id=?").run(author.id ? (await db.prepare('SELECT user_id FROM project_authors WHERE project_id=?').get(assignment.project_id)).user_id : '');
+    const reviewerEmail = (await db.prepare('SELECT email FROM users WHERE id=?').get(assignment.reviewer_user_id)).email;
     await login(reviewerEmail);
     await call(reviewerEmail, 'PUT', `/assignments/${assignment.id}/start`, {});
-    const criteria = db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
+    const criteria = await db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
     // O avaliador escreve o nome do autor na justificativa: nem resposta nem banco podem guardá-lo.
     const result = await call(reviewerEmail, 'PUT', `/assignments/${assignment.id}/review`, {
       scores: criteria.map(c => ({ criterion_id: c.id, score: 5, comment: '' })), general_comment: '',
@@ -303,7 +303,7 @@ test('justificativa de pontos é removida de identificadores na avaliação anô
     });
     assert.equal(result.status, 200, JSON.stringify(result.data));
     assert.ok(!JSON.stringify(result.data).includes(author.name), 'o nome do autor não pode voltar na resposta anônima');
-    const stored = db.prepare('SELECT r.bonus_justification FROM reviews r WHERE r.assignment_id=?').get(assignment.id);
+    const stored = await db.prepare('SELECT r.bonus_justification FROM reviews r WHERE r.assignment_id=?').get(assignment.id);
     assert.ok(stored && !stored.bonus_justification.includes(author.name), 'o banco também não pode conservar o identificador');
   } finally { await close(); }
 });
@@ -312,9 +312,9 @@ test('avaliação finalizada não aceita alteração de nota nem de bônus', asy
   const { db, login, call, close } = await scenario();
   try {
     await login('avaliador1@blindpitch.demo');
-    const done = db.prepare("SELECT a.id FROM assignments a JOIN reviews r ON r.assignment_id=a.id WHERE a.reviewer_user_id=(SELECT id FROM users WHERE email='avaliador1@blindpitch.demo') AND r.submitted_at IS NOT NULL LIMIT 1").get();
+    const done = await db.prepare("SELECT a.id FROM assignments a JOIN reviews r ON r.assignment_id=a.id WHERE a.reviewer_user_id=(SELECT id FROM users WHERE email='avaliador1@blindpitch.demo') AND r.submitted_at IS NOT NULL LIMIT 1").get();
     if (!done) return;
-    const criteria = db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
+    const criteria = await db.prepare('SELECT * FROM rubric_criteria ORDER BY order_index').all();
     const blocked = await call('avaliador1@blindpitch.demo', 'PUT', `/assignments/${done.id}/review`, { scores: criteria.map(c => ({ criterion_id: c.id, score: 1, comment: '' })), general_comment: '', finalize: true, bonus: { points: 2, justification: 'Tentativa inválida aqui.', criterion: '' } });
     assert.equal(blocked.status, 409);
   } finally { await close(); }
@@ -375,8 +375,8 @@ test('publicação por texto direto não injeta identificadores na galeria', asy
   const { db, base, login, call, close } = await scenario();
   try {
     await login('participante2@blindpitch.demo');
-    const project = db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante2@blindpitch.demo' LIMIT 1").get();
-    db.prepare("UPDATE projects SET anonymization_approved=1,status='reviewed',problem=? WHERE id=?")
+    const project = await db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante2@blindpitch.demo' LIMIT 1").get();
+    await db.prepare("UPDATE projects SET anonymization_approved=1,status='reviewed',problem=? WHERE id=?")
       .run('Projeto conduzido por Ana Souza, contato ana@escola.test.', project.id);
     await call('participante2@blindpitch.demo', 'PUT', `/projects/${project.id}/publication`, { targets: { gallery: true } });
     const gallery = await (await fetch(`${base}/api/public/gallery`)).json();
@@ -390,7 +390,7 @@ test('varredura: nenhum endpoint alcançável pelo avaliador devolve dados de pa
   try {
     await login('avaliador1@blindpitch.demo');
     const cookie = sessions.get('avaliador1@blindpitch.demo').cookie;
-    const people = db.prepare(`SELECT u.email,u.name,p.school_or_class FROM users u
+    const people = await db.prepare(`SELECT u.email,u.name,p.school_or_class FROM users u
       LEFT JOIN participant_profiles p ON p.user_id=u.id WHERE u.role='participant'`).all();
     assert.ok(people.length >= 3, 'há participantes para comparar');
 
@@ -408,7 +408,7 @@ test('varredura: nenhum endpoint alcançável pelo avaliador devolve dados de pa
     }
 
     // Toda atribuição anônima do avaliador, no detalhe.
-    const anonymous = db.prepare(`SELECT a.id FROM assignments a
+    const anonymous = await db.prepare(`SELECT a.id FROM assignments a
       JOIN projects p ON p.id=a.project_id
       JOIN users u ON u.id=a.reviewer_user_id
       WHERE u.email='avaliador1@blindpitch.demo' AND a.review_mode='anonymous' AND p.anonymization_approved=1`).all();

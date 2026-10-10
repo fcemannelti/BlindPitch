@@ -1,8 +1,13 @@
 import ts from '../tools/typescript/lib/typescript.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-const directories=['server','public','scripts','tests'];
-const files=directories.flatMap(dir=>readdirSync(dir).filter(f=>/\.(?:mjs|js)$/u.test(f)).map(f=>resolve(dir,f)));
+// `server/db/` e `api/` também contêm código do runtime: precisam ser verificados.
+// `tests/support/` é helpers, também incluído.
+const directories=['server','server/db','public','scripts','tests','tests/support','api'];
+const files=directories.flatMap(dir=>{
+  try { return readdirSync(dir).filter(f=>/\.(?:mjs|js)$/u.test(f)).map(f=>resolve(dir,f)); }
+  catch { return []; }
+});
 let failures=0;
 if(process.argv.includes('--types')) {
   const program=ts.createProgram(readdirSync('public').filter(file=>file.endsWith('.js')).map(file=>resolve('public',file)),{

@@ -11,7 +11,7 @@ import { scientificFields, scientificLimits, optionalScientificFields } from '..
 
 // Verificação dos renderizadores reais contra HTTP/SQLite. Não substitui QA visual em navegador.
 test('todas as telas renderizam dados reais por papel e escapam conteúdo HTML',async()=>{
-  const db=openDb(':memory:');seed(db);const server=createApp(db);
+  const db=openDb(':memory:');await seed(db);const server=createApp(db);
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}`;
   let cookie='';
   const context=vm.createContext({
@@ -37,7 +37,7 @@ test('todas as telas renderizam dados reais por papel e escapam conteúdo HTML',
       assert.equal(/Íris|ÍRIS|\/assets\/mascot\//u.test(html),false);
       const page=ui.shell(html,'/dashboard');assert.equal((page.match(/data-theme-toggle/gu)||[]).length,1);assert.ok(page.includes('aria-label="Ativar modo escuro"'));
     }
-    const submitted=db.prepare("SELECT id FROM projects WHERE status='submitted'").get();
+    const submitted=await db.prepare("SELECT id FROM projects WHERE status='submitted'").get();
     const projectHtml=await ui.projectDetail(submitted.id);assert.ok(projectHtml.includes('anonymize-form'));assert.equal(projectHtml.includes('Marina Alves'),false);
     const metricsHtml=await ui.organizerDashboard();assert.ok(metricsHtml.includes('Dados ilustrativos'));assert.ok(metricsHtml.includes('Progresso da avaliação'));
     const dangerous='<img src=x onerror="alert(1)">';const escaped=ui.scientificInputs({title:dangerous});assert.equal(escaped.includes('<img src=x'),false);assert.ok(escaped.includes('&lt;img'));
@@ -49,23 +49,23 @@ test('todas as telas renderizam dados reais por papel e escapam conteúdo HTML',
     }
     assert.ok(inputs.includes('proposal-extras'));assert.ok(inputs.includes('rows="10"'));
     await login('participante1@blindpitch.demo');assert.ok((await ui.projectsPage()).includes('Nova proposta'));assert.ok(ui.projectForm().includes('project-form'));
-    const pid=db.prepare('SELECT project_id FROM project_authors WHERE user_id=? LIMIT 1').get(ui.state.user.id).project_id;
+    const pid=(await db.prepare('SELECT project_id FROM project_authors WHERE user_id=? LIMIT 1').get(ui.state.user.id)).project_id;
     assert.ok((await ui.projectDetail(pid)).includes('Acompanhe a proposta'));
     await login('avaliador1@blindpitch.demo');
     assert.ok((await ui.reviewerDashboard()).includes('Avaliação anônima ativa'));assert.ok((await ui.reviewerDashboard(true)).includes('Seu histórico'));
-    const assignment=db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=? AND status='pending'").get(ui.state.user.id);
+    const assignment=await db.prepare("SELECT id FROM assignments WHERE reviewer_user_id=? AND status='pending'").get(ui.state.user.id);
     const reviewHtml=await ui.reviewPage(assignment.id);assert.ok(reviewHtml.includes('review-form'));assert.ok(reviewHtml.includes('Avaliação anônima ativa'));assert.equal(reviewHtml.includes('Caio Nunes'),false);
     assert.ok(reviewHtml.includes('Revisar e finalizar'));
   } finally {await new Promise(resolve=>server.close(resolve));db.close();}
 });
 
-test('SQLite persiste propostas e avaliações após reabrir a base; seed é idempotente',()=>{
+test('SQLite persiste propostas e avaliações após reabrir a base; seed é idempotente',async()=>{
   const dir=mkdtempSync(join(tmpdir(),'blindpitch-test-')),path=join(dir,'app.sqlite');
   try {
-    const db=openDb(path);assert.equal(seed(db),true);
-    const count=db.prepare('SELECT count(*) n FROM projects').get().n;
-    const code=db.prepare('SELECT anonymous_code FROM projects WHERE anonymous_code IS NOT NULL LIMIT 1').get().anonymous_code;
-    const reviews=db.prepare('SELECT count(*) n FROM reviews').get().n;db.close();
-    const reopened=openDb(path);assert.equal(seed(reopened),false);assert.equal(reopened.prepare('SELECT count(*) n FROM projects').get().n,count);assert.equal(reopened.prepare('SELECT count(*) n FROM reviews').get().n,reviews);assert.ok(reopened.prepare('SELECT id FROM projects WHERE anonymous_code=?').get(code));reopened.close();
+    const db=openDb(path);assert.equal(await seed(db),true);
+    const count=(await db.prepare('SELECT count(*) n FROM projects').get()).n;
+    const code=(await db.prepare('SELECT anonymous_code FROM projects WHERE anonymous_code IS NOT NULL LIMIT 1').get()).anonymous_code;
+    const reviews=(await db.prepare('SELECT count(*) n FROM reviews').get()).n;db.close();
+    const reopened=openDb(path);assert.equal(await seed(reopened),false);assert.equal((await reopened.prepare('SELECT count(*) n FROM projects').get()).n,count);assert.equal((await reopened.prepare('SELECT count(*) n FROM reviews').get()).n,reviews);assert.ok(await reopened.prepare('SELECT id FROM projects WHERE anonymous_code=?').get(code));reopened.close();
   } finally {rmSync(dir,{recursive:true,force:true});}
 });

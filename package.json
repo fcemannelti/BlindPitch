@@ -6,20 +6,29 @@
   "engines": {
     "node": ">=24.0.0"
   },
+  "dependencies": {
+    "@neon/config": "^1.8.6",
+    "@neon/env": "^1.5.3",
+    "pg": "^8.16.3"
+  },
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env server/index.mjs",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "seed": "node --env-file-if-exists=.env server/seed-cli.mjs",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
+    "db:import": "node --env-file-if-exists=.env scripts/import-sqlite.mjs",
     "build": "node scripts/build.mjs",
     "typecheck": "node scripts/check.mjs --types",
     "lint": "node scripts/check.mjs",
     "test": "node --test --test-isolation=none tests/*.test.mjs",
     "test:e2e": "node --test --test-isolation=none tests/api.test.mjs",
+    "test:postgres": "node --test --test-isolation=none tests/postgres.test.mjs",
+    "test:vercel": "node --test --test-isolation=none tests/vercel.test.mjs",
     "test:browser": "node scripts/experience-qa.mjs",
     "test:ux": "node scripts/ux-qa.mjs",
+    "test:responsive": "node scripts/responsive-qa.mjs",
+    "test:touch": "node scripts/touch-qa.mjs",
+    "shots": "node scripts/shots.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
-  },
-  "dependencies": {
-    "firebase": "^13.0.0"
   }
 }

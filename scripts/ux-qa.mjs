@@ -18,7 +18,7 @@ if (!executable) throw new Error('Configure CHROME_PATH para executar o teste de
 
 const temporary = mkdtempSync(join(tmpdir(), 'blindpitch-ux-'));
 const output = resolve('test-results/ux'); mkdirSync(output, { recursive: true });
-const db = openDb(join(temporary, 'test.sqlite')); seed(db);
+const db = openDb(join(temporary, 'test.sqlite')); await seed(db);
 const server = createApp(db);
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const base = 'http://127.0.0.1:' + server.address().port;
@@ -154,13 +154,13 @@ try {
     await click('#privacy-form button[type="submit"]');
     // O formulário é re-renderizado pelo servidor: a nova instância marca o fim do salvamento.
     await until(() => evaluate(`window.__before && document.querySelector('#privacy-form')!==window.__before`), 'preferência ' + identification + ' salva');
-    const stored = db.prepare('SELECT identification FROM privacy_profiles WHERE user_id=?').get(db.prepare("SELECT id FROM users WHERE email='participante1@blindpitch.demo'").get().id);
+    const stored = await db.prepare('SELECT identification FROM privacy_profiles WHERE user_id=?').get((await db.prepare("SELECT id FROM users WHERE email='participante1@blindpitch.demo'").get()).id);
     assert.equal(stored.identification, identification, 'persistência de ' + identification);
   }
   passed('três preferências de identificação persistem no banco pela interface');
 
   // 3. Destinos de publicação com prévia, no detalhe do projeto.
-  const own = db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
+  const own = await db.prepare("SELECT p.id FROM projects p JOIN project_authors a ON a.project_id=p.id JOIN users u ON u.id=a.user_id WHERE u.email='participante1@blindpitch.demo' LIMIT 1").get();
   await visit('/projects/' + own.id, '.publication-panel', 'publicacao');
   assert.equal(await evaluate(`document.querySelectorAll('.publication-panel [data-target]').length`), 3, 'três destinos');
   assert.equal(await visible('.publication-preview'), false, 'prévia começa oculta');
@@ -190,7 +190,7 @@ try {
   passed('organizador aprova avaliadores e configura a pontuação adicional');
 
   // 6. Páginas públicas, com e sem sessão.
-  const slug = db.prepare("SELECT portfolio_slug FROM privacy_profiles WHERE portfolio_slug<>'' LIMIT 1").get().portfolio_slug;
+  const slug = (await db.prepare("SELECT portfolio_slug FROM privacy_profiles WHERE portfolio_slug<>'' LIMIT 1").get()).portfolio_slug;
   await visit('/gallery', '.public-grid', 'galeria-publica');
   assert.ok(await evaluate(`document.querySelectorAll('.public-card').length`) >= 1, 'galeria com conteúdo real');
   await visit('/showcase', '.public-card', 'vitrine-publica');

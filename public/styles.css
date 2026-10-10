@@ -554,7 +554,7 @@ details.panel>summary{color:var(--text);font-size:14px;font-weight:600}details.p
   footer{flex-direction:column;align-items:flex-start;gap:8px;padding-block:20px}footer>span{text-align:left}
   .public-header{flex-wrap:wrap;gap:14px;padding-block:16px}
   .public-header nav{width:100%;justify-content:flex-start;gap:14px;flex-wrap:wrap}
-  .public-header nav>.button{padding:8px 12px;font-size:12.5px}.public-header nav>.button svg{display:none}
+
   .public-header .theme-toggle{margin-left:auto}
   .public-shell>main{padding-bottom:var(--space-8)}.public-shell>main>.page-heading{padding-top:var(--space-7)}
   .hero h1{font-size:clamp(33px,8.6vw,46px);letter-spacing:-.018em}

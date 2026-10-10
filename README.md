@@ -2,11 +2,13 @@
 
 **Primeiro a ideia. Depois, quem a criou.**
 
-Aplicação funcional de avaliação científica inicial anônima para o Ceará Faz Ciência 2026, tema **Ciência Delas**. Inclui cadastro, autenticação, três papéis, propostas em SQLite, revisão da anonimização, rubrica, dashboards, comparações e exportação agregada.
+Aplicação funcional de avaliação científica inicial anônima para o Ceará Faz Ciência 2026, tema **Ciência Delas**. Inclui cadastro, autenticação, três papéis, propostas em SQLite ou PostgreSQL, revisão da anonimização, rubrica, dashboards, comparações e exportação agregada.
+
+A mesma base de código roda localmente em SQLite e na Vercel com PostgreSQL. O backend fala com o banco por uma camada única (`server/db/`), então os 43 endpoints da API funcionam igual nos dois motores.
 
 ## Rodar localmente
 
-Requisito: **Node.js 24 ou superior**, com npm. Não é necessário instalar dependências ou ter internet.
+Requisito: **Node.js 24 ou superior**, com npm. Rode `npm install` uma vez (o único pacote é o driver `pg`, usado apenas quando há `DATABASE_URL`; para o SQLite puro o servidor funciona mesmo sem internet).
 
 Na pasta do projeto:
 
@@ -129,18 +131,37 @@ Use HTTPS em frente ao servidor, preservando a origem dos pedidos. `COOKIE_SECUR
 
 Mantenha SQLite em disco persistente, fora da pasta pública, com backups. A base real recusa inicialização se contiver edições demonstrativas. A coleta experimental real depende do protocolo e dos cuidados definidos pela organização e pelo orientador.
 
+## Publicar na Vercel com PostgreSQL
+
+O projeto roda na Vercel com a API em funções Node.js e PostgreSQL persistente
+(Neon Free ou equivalente). O guia passo a passo — criação do banco, variáveis
+de ambiente, verificação e migração opcional dos dados — está em
+**[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+```powershell
+npm run db:migrate    # cria as 19 tabelas (idempotente)
+npm run db:import     # simula a importação do SQLite local
+```
+
+Sem `DATABASE_URL` a aplicação continua usando SQLite, então o
+`npm start` local não mudou em nada.
+
 ## Estrutura
 
 ```text
 public/                 interface, temas, estilos, favicon e seis corujas transparentes
-server/                 API, autenticação, validação, métricas, banco e seed
-db/schema.sql           esquema, constraints e índices
-tests/                  HTTP, segurança, persistência e renderização
-scripts/                lint, verificação de tipos e build
+public/styles.mobile.css camada de estilos do celular (menu, tabelas, toque)
+server/                 API, autenticação, validação, métricas e seed
+server/db/              drivers SQLite e PostgreSQL, esquema e migrações
+api/index.mjs           função Node.js da Vercel (não chama listen)
+db/schema.sql           esquema SQLite, constraints e índices
+db/schema.postgres.sql  esquema PostgreSQL equivalente (19 tabelas)
+tests/                  HTTP, segurança, persistência, PostgreSQL e Vercel
+scripts/                lint, verificação de tipos, build, migração, importação e QA de navegador
 tools/typescript/       compilador oficial offline e licença; fora do runtime
-docs/                   especificação, arquitetura e relatório de aceite
+docs/                   especificação, arquitetura, aceite e publicação
 data/                   banco local, ignorado no Git
 dist/                   build gerado, ignorado no Git
 ```
 
-Veja [arquitetura e limites](docs/ARQUITETURA.md) e [critérios de aceite](docs/ACEITE.md).
+Veja [arquitetura e limites](docs/ARQUITETURA.md), [publicação na Vercel](docs/DEPLOY.md), [interface no celular](docs/MOBILE.md) e [critérios de aceite](docs/ACEITE.md).

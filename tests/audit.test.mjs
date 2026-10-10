@@ -11,7 +11,7 @@ import { createApp } from '../server/app.mjs';
 import { seed, demoPassword } from '../server/seed.mjs';
 
 async function fixture(run) {
-  const db=openDb(':memory:');seed(db);const server=createApp(db);
+  const db=openDb(':memory:');await seed(db);const server=createApp(db);
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${server.address().port}`;
   const send=async(path,method='GET',body,headers={})=>{
@@ -35,10 +35,10 @@ test('login válido não reinicia tentativas maliciosas do mesmo IP',()=>fixture
 }));
 
 test('cadastro público limita abuso antes de executar hashes de senha',()=>fixture(async({send,db})=>{
-  const before=db.prepare('SELECT count(*) n FROM users').get().n;
+  const before=(await db.prepare('SELECT count(*) n FROM users').get()).n;
   for(let i=0;i<20;i++)assert.equal((await send('/register','POST',{})).status,400);
   assert.equal((await send('/register','POST',{})).status,429);
-  assert.equal(db.prepare('SELECT count(*) n FROM users').get().n,before);
+  assert.equal((await db.prepare('SELECT count(*) n FROM users').get()).n,before);
 }));
 
 test('login, sessão e logout não dependem de edição salva que deixou de existir',()=>fixture(async({login})=>{
@@ -53,12 +53,12 @@ test('login, sessão e logout não dependem de edição salva que deixou de exis
 test('confirmação repetida de cadastro persiste uma única proposta e isola chave por usuário/edição',()=>fixture(async({login,db})=>{
   const participant=await login('participante1@blindpitch.demo'),other=await login('participante2@blindpitch.demo'),organizer=await login('organizador@blindpitch.demo');
   const content={title:'Teste de conexão interrompida',scientific_area:'Tecnologia'},headers={'Idempotency-Key':randomUUID()};
-  const before=db.prepare('SELECT count(*) n FROM projects').get().n;
+  const before=(await db.prepare('SELECT count(*) n FROM projects').get()).n;
   const responses=await Promise.all(Array.from({length:3},()=>participant('/projects','POST',content,headers)));
   assert.ok(responses.every(response=>response.status===200));assert.equal(new Set(responses.map(response=>response.data.id)).size,1);
-  assert.equal(db.prepare('SELECT count(*) n FROM projects').get().n,before+1);
+  assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n,before+1);
   const projectId=responses[0].data.id;
-  assert.equal(db.prepare("SELECT count(*) n FROM audit_logs WHERE entity_id=? AND action='project.created'").get(projectId).n,1);
+  assert.equal((await db.prepare("SELECT count(*) n FROM audit_logs WHERE entity_id=? AND action='project.created'").get(projectId)).n,1);
   assert.equal((await participant('/projects','POST',{...content,title:'Outro conteúdo'},headers)).status,409);
   assert.equal((await participant('/projects','POST',content,{'Idempotency-Key':'inválida'})).status,400);
   const second=await other('/projects','POST',content,headers);assert.equal(second.status,200);assert.notEqual(second.data.id,projectId);
@@ -82,7 +82,7 @@ test('isolamento por usuário, papel e edição também protege URLs e mutaçõe
   const project=(await participant('/projects','POST',{title:'Projeto reservado',scientific_area:'Física'})).data.id;
   for(const [method,suffix,body] of [['GET','',undefined],['PUT','',{title:'Alterado',scientific_area:'Física'}],['POST','/submit',{}],['GET','/results',undefined]])assert.equal((await other('/projects/'+project+suffix,method,body)).status,404);
   for(const path of ['/projects','/projects/'+project,'/users','/metrics','/audit','/export'])assert.equal((await reviewer(path)).status,403);
-  const foreign=db.prepare("SELECT a.id FROM assignments a JOIN users u ON u.id=a.reviewer_user_id WHERE u.email='avaliador2@blindpitch.demo'").get().id;
+  const foreign=(await db.prepare("SELECT a.id FROM assignments a JOIN users u ON u.id=a.reviewer_user_id WHERE u.email='avaliador2@blindpitch.demo'").get()).id;
   assert.equal((await reviewer('/assignments/'+foreign)).status,404);
   assert.equal((await reviewer('/assignments/'+foreign+'/start','POST',{})).status,404);
   assert.equal((await reviewer('/assignments/'+foreign+'/review','PUT',{})).status,404);
@@ -90,23 +90,23 @@ test('isolamento por usuário, papel e edição também protege URLs e mutaçõe
   assert.equal((await participant('/projects/'+project+'?event_id='+next)).status,404);
   assert.equal((await organizer('/projects/'+project+'/archive?event_id='+next,'POST',{})).status,404);
   assert.equal((await participant('/projects/'+project+'?event_id='+original)).status,200);
-  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
-  assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
+  assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).length,0);
+  assert.equal((await db.prepare('PRAGMA integrity_check').get()).integrity_check,'ok');
 }));
 
-test('inicialização real valida credenciais e desfaz toda a edição quando a conta falha',()=>{
+test('inicialização real valida credenciais e desfaz toda a edição quando a conta falha',async()=>{
   const db=openDb(':memory:');
   try {
     for(const [email,password] of [['inválido','SenhaInicialLonga2026'],['admin@example.test','            ']]) {
-      assert.throws(()=>initializeRealDb(db,email,password));assert.equal(db.prepare('SELECT count(*) n FROM events').get().n,0);
+      await assert.rejects(()=>initializeRealDb(db,email,password));assert.equal((await db.prepare('SELECT count(*) n FROM events').get()).n,0);
     }
-    db.exec("CREATE TRIGGER fail_admin BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT,'Falha simulada'); END;");
-    assert.throws(()=>initializeRealDb(db,'admin@example.test','SenhaInicialLonga2026'));
-    for(const table of ['events','rubric_criteria','settings','users'])assert.equal(db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
-    db.exec('DROP TRIGGER fail_admin');
-    assert.equal(initializeRealDb(db,' ADMIN@example.test ','  SenhaInicialLonga2026  '),true);
-    const account=db.prepare('SELECT * FROM users').get();assert.equal(account.email,'admin@example.test');assert.equal(passwordMatches('SenhaInicialLonga2026',account.password_hash),true);
-    assert.equal(initializeRealDb(db,'ignored','ignored'),false);
+    await db.exec("CREATE TRIGGER fail_admin BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT,'Falha simulada'); END;");
+    await assert.rejects(()=>initializeRealDb(db,'admin@example.test','SenhaInicialLonga2026'));
+    for(const table of ['events','rubric_criteria','settings','users'])assert.equal((await db.prepare(`SELECT count(*) n FROM ${table}`).get()).n,0);
+    await db.exec('DROP TRIGGER fail_admin');
+    assert.equal(await initializeRealDb(db,' ADMIN@example.test ','  SenhaInicialLonga2026  '),true);
+    const account=await db.prepare('SELECT * FROM users').get();assert.equal(account.email,'admin@example.test');assert.equal(passwordMatches('SenhaInicialLonga2026',account.password_hash),true);
+    assert.equal(await initializeRealDb(db,'ignored','ignored'),false);
   } finally {db.close();}
 });
 
